@@ -1,17 +1,58 @@
-import React from 'react';
+import 'bulmaswatch/superhero/bulmaswatch.min.css';
+import * as esbuild from 'esbuild-wasm';
+import { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
-import './index.css';
-import App from './App';
-import reportWebVitals from './reportWebVitals';
+import { unpkgPathPlugin } from './plugins/unpkg-path-plugin';
+import { fetchPlugin } from './plugins/fetch-plugin';
+import CodeEditor from './components/CodeEditor';
+import CodePreview from './components/CodePreview';
 
-ReactDOM.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-  document.getElementById('root')
-);
+const App = () => {
+  const ref = useRef<any>();
+  const [code, setCode] = useState('')
+  const [input, setInput] = useState('');
 
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
-reportWebVitals();
+  const startService = async () => {
+    ref.current = await esbuild.startService({
+      worker: true,
+      wasmURL: 'https://unpkg.com/esbuild-wasm@0.8.27/esbuild.wasm',
+    });
+  };
+  useEffect(() => {
+    startService();
+  }, []);
+
+  const onClick = async () => {
+    if (!ref.current) {
+      return;
+    }
+
+    const result = await ref.current.build({
+      entryPoints: ['index.js'],
+      bundle: true,
+      write: false,
+      plugins: [unpkgPathPlugin(), fetchPlugin(input)],
+      define: {
+        'process.env.NODE_ENV': '"production"',
+        global: 'window',
+      },
+    });
+
+    setCode(result.outputFiles[0].text);
+  };
+
+  return (
+    <div>
+      <CodeEditor 
+      initialValue='const a = 1;'
+      onChange={(value) => setInput(value)}
+       />
+      <div>
+        <button onClick={onClick}>Submit</button>
+      </div>
+      <CodePreview code={code} />
+    </div>
+  );
+};
+
+ReactDOM.render(<App />, document.querySelector('#root'));
